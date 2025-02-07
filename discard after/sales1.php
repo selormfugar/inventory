@@ -1,6 +1,7 @@
 <?php
 require_once 'includes/header.php';
 require_once 'includes/functions.php';
+require_once 'includes/sidebar.php';
 
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -83,33 +84,10 @@ $sales = $sales->fetchAll();
 $products = get_products($pdo);
 ?>
 
-
-<!DOCTYPE html>
-<html lang="en">
-<?php
-require_once 'includes/head.php';
-require_once 'includes/header.php';
-?>
-<body class="with-welcome-text">
-<div class="container-scroller">
-    <!-- partial:../../partials/_navbar.html -->
-    <?php require_once 'includes/navbar.php'; ?>
-    <!-- partial -->
-    <div class="container-fluid page-body-wrapper">
-        <!-- partial:../../partials/_sidebar.html -->
-        <?php require_once 'includes/partial-bar.php'; ?>
-        <!-- partial -->
-        <div class="main-panel">
-            <div class="content-wrapper">
-                <div class="row">
-                    <div class="col-lg-12 grid-margin stretch-card">
-                        <div class="card">
-                            <div class="card-body">
-                                <h4 class="card-title">Sales Management</h4>
-                                <p class="card-description">Manage your sales and invoices efficiently.</p>
-
-                                <!-- Filter Form in a Row -->
-                                <div class="row mb-4">
+<div class="main-content" style="margin-left: 250px; padding: 20px;">
+    <h2>Sales</h2>
+    <!-- Filter Form in a Row -->
+    <div class="row mb-4">
         <div class="col-md-4">
             <input type="text" id="filter-customer" class="form-control" placeholder="Filter by Customer Name" maxlength="50" onkeyup="filterTable()">
         </div>
@@ -121,22 +99,21 @@ require_once 'includes/header.php';
         </div>
     </div>
 
-                                <!-- Display alert if set -->
-                                <?php if (isset($alert)) echo $alert; ?>
+    <!-- Display alert if set -->
+    <?php if (isset($alert)) echo $alert; ?>
 
-                          <!-- Add Sale Button -->
+    <!-- Add Sale Button -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addSaleModal">
             New Sale
         </button>
     </div>
-    <!-- it be mainly  copy and paste -->
 
-                                <!-- Sales Table -->
-                                <div class="table-responsive">
-                                    <table class="table table-light table-hover" id="salesTable">
-                                        <thead>
-                                        <tr>
+    <!-- Sales Table -->
+    <div class="table-responsive">
+        <table class="table table-striped" id="salesTable">
+            <thead>
+                <tr>
                     <th>Date</th>
                     <th>Invoice #</th>
                     <th>Customer</th>
@@ -147,8 +124,8 @@ require_once 'includes/header.php';
                     <th>Status</th>
                     <th>Actions</th>
                 </tr>
-                                        </thead>
-                                        <tbody>
+            </thead>
+            <tbody>
                 <?php foreach ($sales as $sale): ?>
                 <tr>
                     <td><?php echo format_date($sale['created_at']); ?></td>
@@ -183,25 +160,8 @@ require_once 'includes/header.php';
                 </tr>
                 <?php endforeach; ?>
             </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <!-- content-wrapper ends -->
-            <!-- partial:../../partials/_footer.html -->
-            <?php require_once 'includes/footer.php';
-              require_once 'includes/main.php';
-              ?>
-            <!-- partial -->
-        </div>
-        <!-- main-panel ends -->
+        </table>
     </div>
-    <!-- page-body-wrapper ends -->
-</div>
-<!-- container-scroller -->
 
     <!-- Add Sale Modal -->
     <div class="modal fade" id="addSaleModal" tabindex="-1">
@@ -301,16 +261,7 @@ require_once 'includes/header.php';
         </div>
     </div>
 
-<!-- Scripts -->
-<script src="../../assets/vendors/js/vendor.bundle.base.js"></script>
-<script src="../../assets/vendors/bootstrap-datepicker/bootstrap-datepicker.min.js"></script>
-<script src="../../assets/js/off-canvas.js"></script>
-<script src="../../assets/js/template.js"></script>
-<script src="../../assets/js/settings.js"></script>
-<script src="../../assets/js/hoverable-collapse.js"></script>
-<script src="../../assets/js/todolist.js"></script>
-
-<script>
+    <script>
     // Handle dynamic product rows
     document.getElementById('add-product').addEventListener('click', function() {
         const row = document.querySelector('.product-row').cloneNode(true);
@@ -400,5 +351,6 @@ require_once 'includes/header.php';
     }
     </script>
 
-</body>
-</html>
+</div>
+
+<?php require_once 'includes/footer.php'; ?> 
