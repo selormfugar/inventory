@@ -1,4 +1,6 @@
 <?php
+session_start();
+
 require_once 'includes/header.php';
 require_once 'includes/functions.php';
 
@@ -137,6 +139,7 @@ require_once 'includes/header.php';
                                     <table class="table table-light table-hover" id="salesTable">
                                         <thead>
                                         <tr>
+                                            <th>#</th>
                     <th>Date</th>
                     <th>Invoice #</th>
                     <th>Customer</th>
@@ -149,8 +152,12 @@ require_once 'includes/header.php';
                 </tr>
                                         </thead>
                                         <tbody>
-                <?php foreach ($sales as $sale): ?>
+                <?php
+                $counter = 1; 
+                 foreach ($sales as $sale): ?>
+                    
                 <tr>
+                    <td><?php echo $counter ; ?></td>
                     <td><?php echo format_date($sale['created_at']); ?></td>
                     <td><?php echo $sale['invoice_id']; ?></td>
                     <td><?php echo $sale['customer_name']; ?></td>
@@ -181,7 +188,9 @@ require_once 'includes/header.php';
                         <?php endif; ?>
                     </td>
                 </tr>
-                <?php endforeach; ?>
+                <?php $counter++;
+                endforeach;
+                  ?>
             </tbody>
                                     </table>
                                 </div>

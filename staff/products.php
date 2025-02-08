@@ -1,4 +1,5 @@
 <?php
+session_start();
 require_once 'includes/header.php';
 require_once 'includes/functions.php';
 
@@ -120,7 +121,7 @@ $suppliers = get_suppliers($pdo);
                                 <div class="table-responsive">
                                     <table class="table table-light table-hover" id="productsTable">
                                         <thead>
-                                        <tr>
+                                        <tr>     <th>#</th>
                     <th>SKU</th>
                     <th>Name</th>
                     <th>Category</th>
@@ -131,8 +132,11 @@ $suppliers = get_suppliers($pdo);
                 </tr>
                                         </thead>
                                         <tbody>
-                <?php foreach ($products as $product): ?>
-                <tr>
+                <?php
+                                $counter = 1; 
+
+foreach ($products as $product): ?>
+                <tr><td><?php  echo $counter ?></td>
                     <td><?php echo htmlspecialchars($product['sku']); ?></td>
                     <td><?php echo htmlspecialchars($product['name']); ?></td>
                     <td><?php echo htmlspecialchars($product['category_name']); ?></td>
@@ -161,7 +165,8 @@ $suppliers = get_suppliers($pdo);
                         </button>
                     </td>
                 </tr>
-                <?php endforeach; ?>
+                <?php  $counter++;
+            endforeach; ?>
             </tbody>
                                     </table>
                                 </div>
