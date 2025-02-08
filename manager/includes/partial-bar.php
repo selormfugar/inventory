@@ -9,13 +9,13 @@
             <!-- <li class="nav-item nav-category">Actions</li> -->
             <li class="nav-item">
               <a class="nav-link"  href="./products.php">
-                <i class="mdi mdi-grid-large menu-icon"></i>
-                <span class="menu-title">View Products</span>
+              <i class="menu-icon mdi mdi-card-text-outline"></i>
+              <span class="menu-title">View Products</span>
               </a>
             </li>
             <li class="nav-item">
               <a class="nav-link"  href="./bills.php">
-              <i class="menu-icon mdi mdi-card-text-outline"></i>
+              <i class="menu-icon mdi mdi-table"></i>
               <span class="menu-title">View Bills</span>
               </a>
             </li>

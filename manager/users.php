@@ -59,7 +59,7 @@ require_once 'includes/header.php';
         <div class="col-md-4">
             <select id="filter-role" class="form-select" onchange="filterTable()">
                 <option value="">All Roles</option>
-                <option value="admin">Admin</option>
+                <!-- <option value="admin">Admin</option> -->
                 <option value="manager">Manager</option>
                 <option value="staff">Staff</option>
             </select>
@@ -121,7 +121,75 @@ require_once 'includes/header.php';
                         </div>
                     </div>
                 </div>
+            </div><!-- Add User Modal -->
+<div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addUserModalLabel">Add New User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
+            <div class="modal-body">
+                <form id="addUserForm">
+                    <!-- Username & Password -->
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="username" name="username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    
+                    <!-- Role Selection -->
+                    <div class="mb-3">
+                        <label for="role" class="form-label">Role</label>
+                        <select class="form-select" id="role" name="role">
+                            <option value="staff" selected>Staff</option>
+                            <option value="manager">Manager</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Full Name -->
+                    <div class="mb-3">
+                        <label for="full_name" class="form-label">Full Name</label>
+                        <input type="text" class="form-control" id="full_name" name="full_name">
+                    </div>
+                    
+                    <!-- Email -->
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email">
+                    </div>
+                    
+                    <!-- Phone -->
+                    <div class="mb-3">
+                        <label for="phone" class="form-label">Phone</label>
+                        <input type="text" class="form-control" id="phone" name="phone">
+                    </div>
+                    
+                    <!-- Address -->
+                    <div class="mb-3">
+                        <label for="address" class="form-label">Address</label>
+                        <textarea class="form-control" id="address" name="address"></textarea>
+                    </div>
+                    
+                    <!-- Avatar Upload -->
+                    <div class="mb-3">
+                        <label for="avatar" class="form-label">Avatar</label>
+                        <input type="file" class="form-control" id="avatar" name="avatar">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="submit" form="addUserForm" class="btn btn-primary">Save User</button>
+            </div>
+        </div>
+    </div>
+</div>
+
             <!-- content-wrapper ends -->
             <!-- partial:../../partials/_footer.html -->
             <?php require_once 'includes/footer.php';
@@ -135,103 +203,6 @@ require_once 'includes/header.php';
 </div>
 <!-- container-scroller -->
 
-    <!-- Add Sale Modal -->
-    <div class="modal fade" id="addSaleModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">New Sale</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <form method="POST" id="saleForm">
-                    <div class="modal-body">
-                        <input type="hidden" name="action" value="add_sale">
-                        
-                        <!-- Customer Information -->
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label class="form-label">Customer Name</label>
-                                <input type="text" class="form-control" name="customer_name" required>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Customer Number</label>
-                                <input type="text" class="form-control" name="customer_number" required>
-                            </div>
-                        </div>
-
-                        <!-- Products -->
-                        <div id="product-rows">
-                            <div class="row mb-3 product-row">
-                                <div class="col-md-5">
-                                    <label class="form-label">Product</label>
-                                    <select class="form-select product-select" name="products[]" required>
-                                        <option value="">Select Product</option>
-                                        <?php foreach ($products as $product): ?>
-                                        <option value="<?php echo $product['id']; ?>" 
-                                                data-price="<?php echo $product['price']; ?>"
-                                                data-stock="<?php echo $product['stock']; ?>">
-                                            <?php echo $product['name']; ?> (Stock: <?php echo $product['stock']; ?>)
-                                        </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label">Quantity</label>
-                                    <input type="number" class="form-control quantity" name="quantities[]" min="1" required>
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label">Unit Price</label>
-                                    <input type="number" step="0.01" class="form-control price" name="prices[]" required>
-                                </div>
-                                <div class="col-md-1">
-                                    <label class="form-label">&nbsp;</label>
-                                    <button type="button" class="btn btn-danger remove-row">×</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <button type="button" class="btn btn-secondary" id="add-product">Add Product</button>
-
-                        <!-- Total Amount -->
-                        <div class="row mt-3">
-                            <div class="col-md-6 offset-md-6">
-                                <label class="form-label">Total Amount</label>
-                                <input type="number" step="0.01" class="form-control" name="total_amount" id="total-amount" readonly>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <button type="submit" class="btn btn-primary">Save Sale</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Mark Paid Modal -->
-    <div class="modal fade" id="markPaidModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Mark Invoice as Paid</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <form method="POST">
-                    <div class="modal-body">
-                        <input type="hidden" name="action" value="update_status">
-                        <input type="hidden" name="status" value="paid">
-                        <input type="hidden" name="invoice_id" id="paid-invoice-id">
-                        <p>Are you sure you want to mark this invoice as paid?</p>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-success">Mark as Paid</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
 
 <!-- Scripts -->
 <script src="../../assets/vendors/js/vendor.bundle.base.js"></script>
