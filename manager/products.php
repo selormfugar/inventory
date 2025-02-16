@@ -1,8 +1,7 @@
 <?php
-session_start();
-require_once 'includes/header.php';
+// session_start();
 require_once 'includes/functions.php';
-
+require_once 'includes/db.php';
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['action'])) {

@@ -1,11 +1,90 @@
 <?php
-session_start();
+session_start();if (!isset($_SESSION['user_id'])) {
+    header('Location: ../index.php');
+    exit();
+}
 require_once 'includes/header.php';
 require_once 'includes/functions.php';
 
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    // ... existing code ...
+    if (isset($_POST['add_user'])) {
+        // Retrieve form data
+        $username = trim($_POST['username']);
+        $password = trim($_POST['password']);
+        $role = trim($_POST['role']);
+        $full_name = trim($_POST['full_name']);
+        $email = trim($_POST['email']);
+        $phone = trim($_POST['phone']);
+        $address = trim($_POST['address']);
+
+        // Validate form data
+        $errors = [];
+        if (empty($username)) {
+            $errors[] = "Username is required.";
+        }
+        if (empty($password)) {
+            $errors[] = "Password is required.";
+        }
+        if (empty($role)) {
+            $errors[] = "Role is required.";
+        }
+        if (empty($email)) {
+            $errors[] = "Email is required.";
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $errors[] = "Invalid email format.";
+        }
+
+        // If no errors, proceed to insert the user
+        if (empty($errors)) {
+            // Hash the password
+            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+
+            // Insert user into the database
+            try {
+                $pdo->beginTransaction();
+
+                // Insert into users table
+                $query = "INSERT INTO users (username, password, role) VALUES (:username, :password, :role)";
+                $stmt = $pdo->prepare($query);
+                $stmt->execute([
+                    ':username' => $username,
+                    ':password' => $hashed_password,
+                    ':role' => $role
+                ]);
+                $user_id = $pdo->lastInsertId();
+
+                // Insert into user_profiles table
+                $query = "INSERT INTO user_profiles (user_id, full_name, email, phone, address) 
+                          VALUES (:user_id, :full_name, :email, :phone, :address)";
+                $stmt = $pdo->prepare($query);
+                $stmt->execute([
+                    ':user_id' => $user_id,
+                    ':full_name' => $full_name,
+                    ':email' => $email,
+                    ':phone' => $phone,
+                    ':address' => $address,
+                ]);
+
+                $pdo->commit();
+
+                // Set success message
+                $_SESSION['message'] = "User added successfully!";
+                header('Location: users.php');
+                exit();
+            } catch (PDOException $e) {
+                $pdo->rollBack();
+                $errors[] = "Database error: " . $e->getMessage();
+            }
+        }
+
+        // If there are errors, set them in session and redirect back
+        if (!empty($errors)) {
+            $_SESSION['errors'] = $errors;
+            header('Location: user_management.php');
+            exit();
+        }
+    }
 }
 
 // Get filter values
@@ -241,6 +320,29 @@ function filterTable() {
         }
     }
 }
+
+document.getElementById('addUserForm').addEventListener('submit', function(event) {
+    event.preventDefault();
+
+    const formData = new FormData(this);
+
+    fetch('users.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('User added successfully!');
+            window.location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+});
 </script>
 
 </body>

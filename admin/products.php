@@ -1,7 +1,12 @@
 <?php
 session_start();
-require_once 'includes/header.php';
+if (!isset($_SESSION['user_id']))
+{
+    header('Location: ../index.php');
+    exit();
+}
 require_once 'includes/functions.php';
+require_once 'includes/db.php';
 
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {

@@ -47,10 +47,7 @@
                                 <label for="address" class="form-label">Address</label>
                                 <textarea class="form-control" id="address" name="address"></textarea>
                             </div>
-                            <div class="mb-3">
-                                <label for="avatar" class="form-label">Avatar</label>
-                                <input type="file" class="form-control" id="avatar" name="avatar">
-                            </div>
+                          
                         </div>
                     </div>
                 </form>

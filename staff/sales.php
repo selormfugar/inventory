@@ -6,83 +6,112 @@ require_once 'includes/functions.php';
 
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    if (isset($_POST['action'])) {
-        switch ($_POST['action']) {
-            case 'add_sale':
-                try {
-                    $pdo->beginTransaction();
+    $user_id = $_SESSION['user_id'];
 
-                    // Create invoice
-                    $stmt = $pdo->prepare("INSERT INTO invoices (customer_name, customer_number, total_amount) 
-                                         VALUES (?, ?, ?)");
-                    $stmt->execute([
-                        sanitize_input($_POST['customer_name']),
-                        sanitize_input($_POST['customer_number']),
-                        (float)$_POST['total_amount']
-                    ]);
-                    $invoice_id = $pdo->lastInsertId();
-
-                    // Add sales items
-                    $stmt = $pdo->prepare("INSERT INTO sales (invoice_id, product_id, quantity, unit_price) 
-                                         VALUES (?, ?, ?, ?)");
-                    
-                    foreach ($_POST['products'] as $index => $product_id) {
-                        if (!empty($product_id)) {
-                            $stmt->execute([
-                                $invoice_id,
-                                (int)$product_id,
-                                (int)$_POST['quantities'][$index],
-                                (float)$_POST['prices'][$index]
-                            ]);
-
-                            // Update product stock
-                            $pdo->prepare("UPDATE products SET stock = stock - ? WHERE id = ?")
-                                ->execute([(int)$_POST['quantities'][$index], (int)$product_id]);
-                        }
-                    }
-
-                    $pdo->commit();
-                    $alert = display_alert("Sale recorded successfully!");
-                } catch (PDOException $e) {
-                    $pdo->rollBack();
-                    $alert = display_alert("Error recording sale: " . $e->getMessage(), "danger");
+    if (!isset($_SESSION['user_id'])) {
+        echo json_encode(["status" => "error", "message" => "User not authenticated"]);
+        exit;
+    }
+    
+    $user_id = $_SESSION['user_id'];
+    
+    if (isset($_POST['action']) && $_POST['action'] === 'add_sale') {
+        try {
+            $pdo->beginTransaction();  // Start transaction
+    
+            // Insert into sales table
+            $stmt = $pdo->prepare("INSERT INTO sales (customer_name, customer_number, invoice_date, total_amount, user_id) 
+                                   VALUES (?, ?, NOW(), ?, ?)");
+            $stmt->execute([
+                $_POST['customer_name'],
+                $_POST['customer_number'],
+                $_POST['total_amount'],
+                $user_id
+            ]);
+    
+            $sales_id = $pdo->lastInsertId(); // Get the last inserted ID
+    
+            // Insert into sale_order table & Update product stock
+            $stmtSaleOrder = $pdo->prepare("INSERT INTO sale_order (sales_id, product_id, quantity, unit_price, total_price, created_at, user_id) 
+                                            VALUES (?, ?, ?, ?, ?, NOW(), ?)");
+            $stmtStockUpdate = $pdo->prepare("UPDATE products SET stock = stock - ? WHERE id = ?");
+            $stmtStockMovement = $pdo->prepare("INSERT INTO stock_movements (product_id, user_id, type, quantity, reason, created_at) 
+                                                VALUES (?, ?, 'out', ?, 'Sale', NOW())");
+    
+            foreach ($_POST['products'] as $index => $product_id) {
+                if (!empty($product_id)) {
+                    $quantity = (int)$_POST['quantities'][$index];
+                    $unit_price = (float)$_POST['prices'][$index];
+                    $total_price = $quantity * $unit_price;
+    
+                    // Insert into sale_order
+                    $stmtSaleOrder->execute([$sales_id, $product_id, $quantity, $unit_price, $total_price, $user_id]);
+    
+                    // Update product stock
+                    $stmtStockUpdate->execute([$quantity, $product_id]);
+    
+                    // Log stock movement
+                    $stmtStockMovement->execute([$product_id, $user_id, $quantity]);
                 }
-                break;
-
-            case 'update_status':
-                try {
-                    $stmt = $pdo->prepare("UPDATE invoices SET status = ? WHERE id = ?");
-                    $stmt->execute([
-                        $_POST['status'],
-                        (int)$_POST['invoice_id']
-                    ]);
-                    $alert = display_alert("Invoice status updated successfully!");
-                } catch (PDOException $e) {
-                    $alert = display_alert("Error updating status: " . $e->getMessage(), "danger");
-                }
-                break;
+            }
+    
+            $pdo->commit(); // Commit transaction
+            echo json_encode(["status" => "success", "message" => "Sale added successfully."]);
+        } catch (Exception $e) {
+            $pdo->rollBack(); // Rollback on error
+            echo json_encode(["status" => "error", "message" => $e->getMessage()]);
         }
     }
+    
+
 }
+
 
 // Get filter values
 $filter_customer = isset($_POST['filter_customer']) ? $_POST['filter_customer'] : '';
 $filter_date = isset($_POST['filter_date']) ? $_POST['filter_date'] : '';
 
-// Get all sales with related data, applying filters
-$sales_query = "SELECT s.*, p.name as product_name, i.customer_name, i.customer_number, 
-                       i.status as invoice_status, i.invoice_date
-                FROM sales s
-                JOIN products p ON s.product_id = p.id
-                JOIN invoices i ON s.invoice_id = i.id
-                WHERE i.customer_name LIKE ? AND DATE(s.created_at) LIKE ?
-                ORDER BY s.created_at DESC";
-$sales = $pdo->prepare($sales_query);
-$sales->execute(["%$filter_customer%", "%$filter_date%"]);
-$sales = $sales->fetchAll();
 
+
+$limit = 15; // Number of records per page
+$page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+$offset = ($page - 1) * $limit;
+
+$query = "SELECT * FROM sales";
+$countQuery = "SELECT COUNT(*) FROM sales";
+$params = [];
+
+// Get all sales with related data, applying filters
+$stmt = $pdo->prepare("SELECT * FROM sales ORDER BY invoice_date DESC LIMIT :limit OFFSET :offset");
+$stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+$stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+$stmt->execute();
+$sales = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$offset = ($page - 1) * $limit;
 // Get products for dropdown
 $products = get_products($pdo);
+
+$saleId = $_GET['sale_id'] ?? null;
+
+if ($saleId) {
+    // Fetch order details from sale_order table
+    $stmt = $pdo->prepare("
+        SELECT so.*, p.name as product_name 
+        FROM sale_order so
+        JOIN products p ON so.product_id = p.id
+        WHERE so.sales_id = ? 
+    ");
+    $stmt->execute([$saleId]);
+    $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Return JSON response
+    header('Content-Type: application/json');
+    echo json_encode($orders);
+} else {
+    echo json_encode([]);
+}
 ?>
 
 
@@ -143,11 +172,7 @@ require_once 'includes/header.php';
                     <th>Date</th>
                     <th>Invoice #</th>
                     <th>Customer</th>
-                    <th>Product</th>
-                    <th>Quantity</th>
-                    <th>Unit Price</th>
                     <th>Total</th>
-                    <th>Status</th>
                     <th>Actions</th>
                 </tr>
                                         </thead>
@@ -158,34 +183,24 @@ require_once 'includes/header.php';
                     
                 <tr>
                     <td><?php echo $counter ; ?></td>
-                    <td><?php echo format_date($sale['created_at']); ?></td>
-                    <td><?php echo $sale['invoice_id']; ?></td>
+                    <td><?php echo format_date($sale['invoice_date']); ?></td>
+                    <td><?php echo $sale['id']; ?></td>
                     <td><?php echo $sale['customer_name']; ?></td>
-                    <td><?php echo $sale['product_name']; ?></td>
-                    <td><?php echo $sale['quantity']; ?></td>
-                    <td><?php echo format_currency($sale['unit_price']); ?></td>
-                    <td><?php echo format_currency($sale['total_price']); ?></td>
-                    <td>
+                    <td><?php echo format_currency($sale['total_amount']); ?></td>
+                    <!-- <td>
                         <span class="badge bg-<?php echo $sale['invoice_status'] == 'paid' ? 'success' : 'warning'; ?>">
                             <?php echo ucfirst($sale['invoice_status']); ?>
                         </span>
-                    </td>
+                    </td> -->
                     <td>
                         <button class="btn btn-sm btn-primary view-sale" 
                                 data-bs-toggle="modal" 
                                 data-bs-target="#viewSaleModal"
-                                data-id="<?php echo $sale['invoice_id']; ?>"
+                                data-id="<?php echo $sale['id']; ?>"
                                 data-customer="<?php echo $sale['customer_name']; ?>">
                             View
                         </button>
-                        <?php if ($sale['invoice_status'] == 'unpaid'): ?>
-                        <button class="btn btn-sm btn-success mark-paid"
-                                data-bs-toggle="modal"
-                                data-bs-target="#markPaidModal"
-                                data-id="<?php echo $sale['invoice_id']; ?>">
-                            Mark Paid
-                        </button>
-                        <?php endif; ?>
+                       
                     </td>
                 </tr>
                 <?php $counter++;
@@ -193,12 +208,118 @@ require_once 'includes/header.php';
                   ?>
             </tbody>
                                     </table>
+<nav aria-label="Page navigation">
+    <ul class="pagination">
+        <?php
+        // Previous page link
+        $prevDisabled = ($page <= 1) ? 'disabled' : '';
+        echo "<li class='page-item {$prevDisabled}'>";
+        echo "<a class='page-link' href='?page=" . ($page - 1) . "'" . ($prevDisabled ? ' tabindex="-1" aria-disabled="true"' : '') . ">Previous</a>";
+        echo "</li>";
+
+        // Calculate range of page numbers to show
+        $range = 2; // Show 2 pages before and after current page
+        $start = max(1, $page - $range);
+        $end = min($total_pages, $page + $range);
+
+        // Show first page if not in range
+        if ($start > 1) {
+            echo "<li class='page-item'><a class='page-link' href='?page=1'>1</a></li>";
+            if ($start > 2) {
+                echo "<li class='page-item disabled'><span class='page-link'>...</span></li>";
+            }
+        }
+
+        // Show page numbers in range
+        for ($i = $start; $i <= $end; $i++) {
+            $active = ($i == $page) ? 'active' : '';
+            echo "<li class='page-item {$active}'>";
+            echo "<a class='page-link' href='?page={$i}'>{$i}</a>";
+            echo "</li>";
+        }
+
+        // Show last page if not in range
+        if ($end < $total_pages) {
+            if ($end < $total_pages - 1) {
+                echo "<li class='page-item disabled'><span class='page-link'>...</span></li>";
+            }
+            echo "<li class='page-item'>";
+            echo "<a class='page-link' href='?page={$total_pages}'>{$total_pages}</a>";
+            echo "</li>";
+        }
+
+        // Next page link
+        $nextDisabled = ($page >= $total_pages) ? 'disabled' : '';
+        echo "<li class='page-item {$nextDisabled}'>";
+        echo "<a class='page-link' href='?page=" . ($page + 1) . "'" . ($nextDisabled ? ' tabindex="-1" aria-disabled="true"' : '') . ">Next</a>";
+        echo "</li>";
+        ?>
+    </ul>
+</nav>
+  
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+            <!-- View Sale Modal -->
+<div class="modal fade" id="viewSaleModal" tabindex="-1" aria-labelledby="viewSaleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewSaleModalLabel">Sale Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p><strong>Customer Name:</strong> <span id="modalCustomerName"></span></p>
+                <p><strong>Sale ID:</strong> <span id="modalSaleId"></span></p>
+                <h6>Order Details:</h6>
+                <ul id="modalOrderDetails"></ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add event listener to all "View" buttons
+    document.querySelectorAll('.view-sale').forEach(button => {
+        button.addEventListener('click', function() {
+            // Get data attributes
+            const saleId = this.getAttribute('data-id');
+            const customerName = this.getAttribute('data-customer');
+
+            // Set customer name and sale ID in the modal
+            document.getElementById('modalCustomerName').textContent = customerName;
+            document.getElementById('modalSaleId').textContent = saleId;
+
+            // Fetch order details via AJAX
+            fetch(`get_sale_order_details.php?sale_id=${saleId}`)
+                .then(response => response.json())
+                .then(data => {
+                    const orderDetails = document.getElementById('modalOrderDetails');
+                    orderDetails.innerHTML = ''; // Clear previous content
+
+                    if (data.length > 0) {
+                        data.forEach(order => {
+                            const listItem = document.createElement('li');
+                            listItem.textContent = `Order ID: ${order.id}, Product: ${order.product_name}, Quantity: ${order.quantity}`;
+                            orderDetails.appendChild(listItem);
+                        });
+                    } else {
+                        orderDetails.innerHTML = '<li>No orders found for this sale.</li>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching order details:', error);
+                });
+        });
+    });
+});
+</script>
             <!-- content-wrapper ends -->
             <!-- partial:../../partials/_footer.html -->
             <?php require_once 'includes/footer.php';
@@ -287,7 +408,7 @@ require_once 'includes/header.php';
     </div>
 
     <!-- Mark Paid Modal -->
-    <div class="modal fade" id="markPaidModal" tabindex="-1">
+    <!-- <div class="modal fade" id="markPaidModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
@@ -308,7 +429,7 @@ require_once 'includes/header.php';
                 </form>
             </div>
         </div>
-    </div>
+    </div> -->
 
 <!-- Scripts -->
 <script src="../../assets/vendors/js/vendor.bundle.base.js"></script>

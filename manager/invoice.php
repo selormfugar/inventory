@@ -1,6 +1,9 @@
 <?php
 require_once 'db.php'; // Ensure you include your database connection
-
+if (!isset($_SESSION['user_id'])) {
+    header('Location: index.php');
+    exit();
+}
 function sanitize_input($data) {
     return htmlspecialchars(strip_tags(trim($data)));
 }

@@ -1,75 +1,16 @@
 <?php
 session_start();
-
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
-
+if (!isset($_SESSION['user_id'])) {
+  header('Location:../index.php');
+  exit();
+}
 $page = 'dashboard';
 $page_title = 'Dashboard';
-require_once 'includes/header.php';
 require_once 'includes/config.php';
 require_once 'includes/db.php';
 require_once 'includes/functions.php';
-
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-  if (isset($_POST['action'])) {
-      switch ($_POST['action']) {
-          case 'add_sale':
-              try {
-                  $pdo->beginTransaction();
-
-                  // Create invoice
-                  $stmt = $pdo->prepare("INSERT INTO invoices (customer_name, customer_number, total_amount) 
-                                       VALUES (?, ?, ?)");
-                  $stmt->execute([
-                      sanitize_input($_POST['customer_name']),
-                      sanitize_input($_POST['customer_number']),
-                      (float)$_POST['total_amount']
-                  ]);
-                  $invoice_id = $pdo->lastInsertId();
-
-                  // Add sales items
-                  $stmt = $pdo->prepare("INSERT INTO sales (invoice_id, product_id, quantity, unit_price) 
-                                       VALUES (?, ?, ?, ?)");
-                  
-                  foreach ($_POST['products'] as $index => $product_id) {
-                      if (!empty($product_id)) {
-                          $stmt->execute([
-                              $invoice_id,
-                              (int)$product_id,
-                              (int)$_POST['quantities'][$index],
-                              (float)$_POST['prices'][$index]
-                          ]);
-
-                          // Update product stock
-                          $pdo->prepare("UPDATE products SET stock = stock - ? WHERE id = ?")
-                              ->execute([(int)$_POST['quantities'][$index], (int)$product_id]);
-                      }
-                  }
-
-                  $pdo->commit();
-                  $alert = display_alert("Sale recorded successfully!");
-              } catch (PDOException $e) {
-                  $pdo->rollBack();
-                  $alert = display_alert("Error recording sale: " . $e->getMessage(), "danger");
-              }
-              break;
-
-          case 'update_status':
-              try {
-                  $stmt = $pdo->prepare("UPDATE invoices SET status = ? WHERE id = ?");
-                  $stmt->execute([
-                      $_POST['status'],
-                      (int)$_POST['invoice_id']
-                  ]);
-                  $alert = display_alert("Invoice status updated successfully!");
-              } catch (PDOException $e) {
-                  $alert = display_alert("Error updating status: " . $e->getMessage(), "danger");
-              }
-              break;
-      }
-  }
-}
 
 $products_query = "SELECT p.*, c.name as category_name, s.name as supplier_name 
                    FROM products p 
@@ -84,6 +25,8 @@ $suppliers = get_suppliers($pdo);
 <html lang="en">
 <?php 
   require_once 'includes/head.php';
+  require_once 'includes/header.php';
+
   ?> 
    <body class="with-welcome-text">
     <div class="container-scroller">
@@ -139,7 +82,7 @@ $suppliers = get_suppliers($pdo);
         <p class="statistics-title">Total Sales</p>
         <h3 class="rate-percentage">
             <?php
-            $stmt = $pdo->query("SELECT COUNT(*) FROM invoices where status = 'paid'");
+            $stmt = $pdo->query("SELECT COUNT(*) FROM sales ");
             echo $stmt->fetchColumn();
             ?>
         </h3>
@@ -159,7 +102,7 @@ $suppliers = get_suppliers($pdo);
         <p class="statistics-title">Low Stock Products</p>
         <h3 class="rate-percentage">
             <?php
-                                     $stmt = $pdo->query("SELECT Count(*) FROM products WHERE stock < 10 ORDER BY stock ASC LIMIT 5");
+             $stmt = $pdo->query("SELECT Count(*) FROM products WHERE stock < 10 ORDER BY stock ASC LIMIT 5");
                                         echo $stmt->fetchColumn();
             ?>
         </h3>
@@ -169,26 +112,26 @@ $suppliers = get_suppliers($pdo);
         <p class="statistics-title">Total Revenue</p>
         <h3 class="rate-percentage">
             <?php
-            $stmt = $pdo->query("SELECT SUM(total_amount) FROM invoices WHERE status = 'paid'");
-            echo number_format($stmt->fetchColumn(), 2);
+          $stmt = $pdo->query("SELECT COALESCE(SUM(total_amount), 0) FROM sales ");
+echo number_format($stmt->fetchColumn(), 2);
             ?>
         </h3>
     </div>
 
-    <!-- <div class="d-none d-md-block">
+    <div class="d-none d-md-block">
         <p class="statistics-title">Top-Selling Product</p>
         <h3 class="rate-percentage">
             <?php
             $stmt = $pdo->query("SELECT p.name 
                                  FROM products p 
-                                 JOIN sales s ON p.id = s.product_id 
+                                 JOIN sale_order s ON p.id = s.product_id 
                                  GROUP BY p.id 
                                  ORDER BY COUNT(s.id) DESC 
                                  LIMIT 1");
             echo htmlspecialchars($stmt->fetchColumn() ?: 'N/A');
             ?>
         </h3>
-    </div> -->
+    </div>
 </div>
 
                           </div>
@@ -208,45 +151,45 @@ $suppliers = get_suppliers($pdo);
                                       <h4 class="card-title card-title-dash">Sales</h4>
                                     </div>
                                     <div>
-                                      <button class="btn btn-primary btn-lg text-white mb-0 me-0" type="button" data-bs-toggle="modal" data-bs-target="#addSaleModal">
-                                        <i class="mdi mdi-clipboard-plus"></i>Add Invoice
-                                      </button>
+                                      <button class="btn btn-success btn-lg text-white mb-0 me-0" type="button" data-bs-toggle="modal" data-bs-target="#addSaleModal">
+                                        <i class="mdi mdi-clipboard-plus"></i>New Sale
+                                      </button> 
+                                     <!-- Button to Trigger Modal -->
+<button type="button" class="btn btn-primary btn-lg text-white mb-0 me-0" data-bs-toggle="modal" data-bs-target="#generateInvoiceModal">
+    Generate Invoice
+</button>
                                     </div>
                                   </div>
-                                  <div class="table-responsive  mt-1">
+                                   <div class="table-responsive  mt-1">
                                   <table class="table">
-    <thead>
-        <tr>
-            <th>#</th>
-            <th>Customer</th>
-            <th>Date</th>
-            <th>Product</th>
-            <th>Amount</th>
-        </tr>
-    </thead>
-    <tbody>
-        <?php
-        $stmt = $pdo->query("SELECT s.*, p.name as product_name, i.customer_name, 
-                                    s.quantity * s.unit_price as total_amount
-                             FROM sales s
-                             JOIN products p ON s.product_id = p.id
-                             JOIN invoices i ON s.invoice_id = i.id where i.status = 'paid'
-                             ORDER BY s.created_at DESC LIMIT 5");
+                                                <thead>
+                                                    <tr>
+                                                        <th>#</th>
+                                                        <th>Customer</th>
+                                                        <th>Date</th>
+                                                        <th>Product</th>
+                                                        <th>Amount</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <?php
+                                                    $stmt = $pdo->query("SELECT customer_name , customer_number, invoice_date,total_amount
+                                                                        FROM sales 
+                                                                        ORDER BY invoice_date DESC LIMIT 5");
 
-        $counter = 1; // Initialize counter
-        while ($row = $stmt->fetch()) {
-            echo "<tr>";
-            echo "<td>" . $counter . "</td>";
-            echo "<td>" . htmlspecialchars($row['customer_name']) . "</td>";
-            echo "<td>" . date('Y-m-d', strtotime($row['created_at'])) . "</td>";
-            echo "<td>" . htmlspecialchars($row['product_name']) . "</td>";
-            echo "<td>$" . number_format($row['total_amount'], 2) . "</td>";
-            echo "</tr>";
-            $counter++; // Increment counter
-        }
-        ?>
-    </tbody>
-</table>
+                                                    $counter = 1; // Initialize counter
+                                                    while ($row = $stmt->fetch()) {
+                                                        echo "<tr>";
+                                                        echo "<td>" . $counter . "</td>";
+                                                        echo "<td>" . htmlspecialchars($row['customer_name']) . "</td>";
+                                                        echo "<td>" . htmlspecialchars($row['customer_number']) . "</td>";
+                                                        echo "<td>$" . number_format($row['total_amount'], 2) . "</td>";
+                                                                  echo "<td>" . date('Y-m-d', strtotime($row['invoice_date'])) . "</td>";  echo "</tr>";
+                                                        $counter++; // Increment counter
+                                                    }
+                                                    ?>
+                                                </tbody>
+                                            </table>
 
                                   
                                   </div>
@@ -262,89 +205,152 @@ $suppliers = get_suppliers($pdo);
 </script>
 
                          <!-- Add Sale Modal -->
-    <div class="modal fade" id="addSaleModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">New Sale</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <form method="POST" id="saleForm">
-                    <div class="modal-body">
-                        <input type="hidden" name="action" value="add_sale">
-                        
-                        <!-- Customer Information -->
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label class="form-label">Customer Name</label>
-                                <input type="text" class="form-control" name="customer_name" required>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Customer Number</label>
-                                <input type="text" class="form-control" name="customer_number" required>
-                            </div>
-                        </div>
-
-                        <!-- Products -->
-                        <div id="product-rows">
-                            <div class="row mb-3 product-row">
-                                <div class="col-md-5">
-                                    <label class="form-label">Product</label>
-                                    <div class="form-group">
-                                        <select class="form-select product-select" name="products[]" required>
-                                            <option value="">Select Product</option>
-                                            <?php foreach ($products as $product): ?>
-                                            <option value="<?php echo $product['id']; ?>" 
-                                                    data-price="<?php echo $product['price']; ?>"
-                                                    data-stock="<?php echo $product['stock']; ?>">
-                                                <?php echo $product['name']; ?> (Stock: <?php echo $product['stock']; ?>)
-                                            </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label">Quantity</label>
-                                    <input type="number" class="form-control quantity" name="quantities[]" min="1" required>
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label">Unit Price</label>
-                                    <input type="number" step="0.01" class="form-control price" name="prices[]"  readonly>
-                                </div>
-                                <div class="col-md-1">
-                                    <label class="form-label">&nbsp;</label>
-                                    <button type="button" class="btn btn-danger remove-row">×</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <button type="button" class="btn btn-secondary" id="add-product">Add Product</button>
-
-                        <!-- Total Amount -->
-                        <div class="row mt-3">
-                            <div class="col-md-6 offset-md-6">
-                                <label class="form-label">Total Amount</label>
-                                <input type="number" step="0.01" class="form-control" name="total_amount" id="total-amount" readonly>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <button type="submit" class="btn btn-primary">Save Sale</button>
-                    </div>
-                </form>
+    <<div class="modal fade" id="addSaleModal" tabindex="-1" aria-labelledby="addSaleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addSaleModalLabel">New Sale</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
+            <form id="saleForm" method="POST">
+                <div class="modal-body">
+                    <input type="hidden" name="action" value="add_sale">
+                    
+                    <!-- Customer Information -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Customer Name</label>
+                            <input type="text" class="form-control" name="customer_name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Customer Number</label>
+                            <input type="text" class="form-control" name="customer_number" required>
+                        </div>
+                    </div>
+
+                    <!-- Products Container -->
+                    <div id="sale-product-rows">
+                        <div class="row mb-3 product-row">
+                            <div class="col-md-5">
+                                <label class="form-label">Product</label>
+                                <select class="form-select product-select" name="products[]" required>
+                                    <option value="">Select Product</option>
+                                    <?php foreach ($products as $product): ?>
+                                    <option value="<?php echo $product['id']; ?>" 
+                                            data-price="<?php echo $product['price']; ?>"
+                                            data-stock="<?php echo $product['stock']; ?>">
+                                        <?php echo $product['name']; ?> (Stock: <?php echo $product['stock']; ?>)
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Quantity</label>
+                                <input type="number" class="form-control quantity" name="quantities[]" min="1" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Unit Price</label>
+                                <input type="number" step="0.01" class="form-control price" name="prices[]" readonly>
+                            </div>
+                            <div class="col-md-1">
+                                <label class="form-label d-block">&nbsp;</label>
+                                <button type="button" class="btn btn-danger btn-sm remove-row">×</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-secondary mb-3" id="add-sale-product">Add Product</button>
+
+                    <!-- Total Amount -->
+                    <div class="row">
+                        <div class="col-md-6 offset-md-6">
+                            <label class="form-label">Total Amount</label>
+                            <input type="number" step="0.01" class="form-control" name="total_amount" id="sale-total-amount" readonly>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Save Sale</button>
+                </div>
+            </form>
         </div>
     </div>
-<script>
-    document.getElementById('saleForm').addEventListener('submit', function(event) {
-        setTimeout(() => {
-            this.reset(); // Reset all form fields
-            document.getElementById('total-amount').value = ''; // Clear total amount
-        }, 500); // Delay to ensure form submission completes
-    });
-</script>
+</div>
 
+
+<div class="modal fade" id="generateInvoiceModal" tabindex="-1" aria-labelledby="generateInvoiceModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="generateInvoiceModalLabel">Generate Invoice</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="invoiceForm" method="POST">
+                <div class="modal-body">
+                    <input type="hidden" name="action" value="add_invoice">
+                    
+                    <!-- Customer Information -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Customer Name</label>
+                            <input type="text" class="form-control" name="customer_name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Customer Number</label>
+                            <input type="text" class="form-control" name="customer_number" required>
+                        </div>
+                    </div>
+
+                    <!-- Products Container -->
+                    <div id="invoice-product-rows">
+                        <div class="row mb-3 product-row">
+                            <div class="col-md-5">
+                                <label class="form-label">Product</label>
+                                <select class="form-select product-select" name="products[]" required>
+                                    <option value="">Select Product</option>
+                                    <?php foreach ($products as $product): ?>
+                                    <option value="<?php echo $product['id']; ?>" 
+                                            data-price="<?php echo $product['price']; ?>"
+                                            data-stock="<?php echo $product['stock']; ?>">
+                                        <?php echo $product['name']; ?> (Stock: <?php echo $product['stock']; ?>)
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Quantity</label>
+                                <input type="number" class="form-control quantity" name="quantities[]" min="1" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Unit Price</label>
+                                <input type="number" step="0.01" class="form-control price" name="prices[]" readonly>
+                            </div>
+                            <div class="col-md-1">
+                                <label class="form-label d-block">&nbsp;</label>
+                                <button type="button" class="btn btn-danger btn-sm remove-row">×</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-secondary mb-3" id="add-invoice-product">Add Product</button>
+
+                    <!-- Total Amount -->
+                    <div class="row">
+                        <div class="col-md-6 offset-md-6">
+                            <label class="form-label">Total Amount</label>
+                            <input type="number" step="0.01" class="form-control" name="total_amount" id="invoice-total-amount" readonly>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer" style="position: sticky; bottom: 0; background-color: white; z-index: 1000;">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Generate Invoice</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
                         </div>
                         <div class="col-lg-4 d-flex flex-column">
                           <div class="row flex-grow">
@@ -420,73 +426,242 @@ $suppliers = get_suppliers($pdo);
 
 <!-- Bootstrap JS (make sure this is included) -->
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/5.1.3/js/bootstrap.bundle.min.js"></script>
- <script>
+ 
+<!-- Updated JavaScript -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    function handleFormSubmit(formId, modalId, type) {
+        const form = document.getElementById(formId);
+        if (form) {
+            form.addEventListener('submit', function (event) {
+                event.preventDefault();
 
-    
-  // Handle dynamic product rows
-  document.getElementById('add-product').addEventListener('click', function() {
-        const row = document.querySelector('.product-row').cloneNode(true);
-        row.querySelector('.product-select').value = '';
-        row.querySelector('.quantity').value = '';
-        row.querySelector('.price').value = '';
-        document.getElementById('product-rows').appendChild(row);
-        attachEventListeners(row);
+                const formData = new FormData(this);
+                const modal = document.getElementById(modalId);
+
+                // Add the action type
+                formData.append('action', type === 'sale' ? 'add_sale' : 'add_invoice');
+
+                fetch('api.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert(data.message);
+
+                        // Ask if they want to print
+                        const shouldPrint = confirm('Do you want to print the ' + type + '?');
+                        if (shouldPrint && data.id) {
+                            if (type === 'sale') {
+                                printSale(data.id);
+                            } else {
+                                printInvoice(data.id);
+                            }
+                        }
+
+                        // Close modal
+                        if (modal) {
+                            const modalInstance = bootstrap.Modal.getInstance(modal) || new bootstrap.Modal(modal);
+                            modalInstance.hide();
+                        }
+
+                        // Reset form
+                        form.reset();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while processing your request. Please try again.');
+                });
+            });
+        }
+    }
+    function printSale(saleId) {
+    fetch('api.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `action=print_sale&sale_id=${saleId}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            fetch('print_template.html')
+                .then(response => response.text())
+                .then(template => {
+                    const printWindow = window.open('', '_blank');
+                    printWindow.document.write(template);
+                    printWindow.document.close();
+
+                    printWindow.onload = function () {
+                        // Populate customer details
+                        printWindow.document.getElementById('customerName').textContent = data.data.customer_name;
+                        printWindow.document.getElementById('customerNumber').textContent = data.data.customer_number;
+                        printWindow.document.getElementById('invoiceDate').textContent = data.data.invoice_date;
+
+                        // Populate product rows
+                        const productsTable = printWindow.document.getElementById('productsTable');
+                        productsTable.innerHTML = ''; // Clear previous rows
+
+                        data.data.products.forEach(product => {
+                            const row = printWindow.document.createElement('tr');
+                            row.innerHTML = `
+                                <td>${product.product_name}</td>
+                                <td>${product.quantity}</td>
+                                <td>${product.unit_price}</td>
+                                <td>${product.total_price}</td>
+                            `;
+                            productsTable.appendChild(row);
+                        });
+
+                        // Print the window
+                        printWindow.print();
+                    };
+                });
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while printing the sale.');
+    });
+}
+
+function printInvoice(invoiceId) {
+    fetch('api.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `action=print_invoice&invoice_id=${invoiceId}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            fetch('print_template.html')
+                .then(response => response.text())
+                .then(template => {
+                    const printWindow = window.open('', '_blank');
+                    printWindow.document.write(template);
+                    printWindow.document.close();
+
+                    printWindow.onload = function () {
+                        // Populate customer details
+                        printWindow.document.getElementById('customerName').textContent = data.data.customer_name;
+                        printWindow.document.getElementById('customerNumber').textContent = data.data.customer_number;
+                        printWindow.document.getElementById('invoiceDate').textContent = data.data.invoice_date;
+
+                        // Populate product rows
+                        const productsTable = printWindow.document.getElementById('productsTable');
+                        productsTable.innerHTML = ''; // Clear previous rows
+
+                        data.data.products.forEach(product => {
+                            const row = printWindow.document.createElement('tr');
+                            row.innerHTML = `
+                                <td>${product.product_name}</td>
+                                <td>${product.quantity}</td>
+                                <td>${product.unit_price}</td>
+                                <td>${product.total_price}</td>
+                            `;
+                            productsTable.appendChild(row);
+                        });
+
+                        // Print the window
+                        printWindow.print();
+                    };
+                });
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while printing the invoice.');
+    });
+}
+
+
+handleFormSubmit('saleForm', 'salesModal', 'sale'); 
+handleFormSubmit('invoiceForm', 'invoicesModal', 'invoice');
+
+    // Add product row handler
+    ['add-sale-product', 'add-invoice-product'].forEach(buttonId => {
+        const addButton = document.getElementById(buttonId);
+        if (addButton) {
+            addButton.addEventListener('click', function () {
+                const containerType = buttonId.includes('sale') ? 'sale' : 'invoice';
+                const container = document.getElementById(`${containerType}-product-rows`);
+                const newRow = container.querySelector('.product-row').cloneNode(true);
+
+                // Reset values
+                newRow.querySelector('.product-select').value = '';
+                newRow.querySelector('.quantity').value = '';
+                newRow.querySelector('.price').value = '';
+
+                container.appendChild(newRow);
+                attachEventListeners(newRow, containerType);
+            });
+        }
     });
 
-    // Remove product row
-    document.addEventListener('click', function(e) {
+    // Remove row handler
+    document.addEventListener('click', function (e) {
         if (e.target.classList.contains('remove-row')) {
-            const rows = document.querySelectorAll('.product-row');
-            if (rows.length > 1) {
-                e.target.closest('.product-row').remove();
-                calculateTotal();
+            const row = e.target.closest('.product-row');
+            const container = row.parentElement;
+            if (container.querySelectorAll('.product-row').length > 1) {
+                row.remove();
+                const containerType = container.id.includes('sale') ? 'sale' : 'invoice';
+                calculateTotal(containerType);
             }
         }
     });
 
-    // Handle product selection
-    function attachEventListeners(row) {
-        const productSelect = row.querySelector('.product-select');
-        const quantityInput = row.querySelector('.quantity');
-        const priceInput = row.querySelector('.price');
+    // Initialize existing rows
+    document.querySelectorAll('.product-row').forEach(row => {
+        const containerType = row.closest('[id^=sale]') ? 'sale' : 'invoice';
+        attachEventListeners(row, containerType);
+    });
+});
 
+
+function attachEventListeners(row, containerType) {
+    const productSelect = row.querySelector('.product-select');
+    const quantityInput = row.querySelector('.quantity');
+    const priceInput = row.querySelector('.price');
+
+    if (productSelect && quantityInput && priceInput) {
         productSelect.addEventListener('change', function() {
             const option = this.options[this.selectedIndex];
-            priceInput.value = option.dataset.price;
-            quantityInput.max = option.dataset.stock;
-            calculateTotal();
+            if (option && option.value) {
+                priceInput.value = option.dataset.price;
+                quantityInput.max = option.dataset.stock;
+                calculateTotal(containerType);
+            }
         });
 
-        quantityInput.addEventListener('input', calculateTotal);
-        priceInput.addEventListener('input', calculateTotal);
+        quantityInput.addEventListener('input', () => calculateTotal(containerType));
+        priceInput.addEventListener('input', () => calculateTotal(containerType));
     }
+}
 
-    // Calculate total amount
-    function calculateTotal() {
+function calculateTotal(containerType) {
+    const container = document.getElementById(`${containerType}-product-rows`);
+    if (container) {
         let total = 0;
-        document.querySelectorAll('.product-row').forEach(row => {
+        container.querySelectorAll('.product-row').forEach(row => {
             const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
             const price = parseFloat(row.querySelector('.price').value) || 0;
             total += quantity * price;
         });
-        document.getElementById('total-amount').value = total.toFixed(2);
+        const totalField = document.getElementById(`${containerType}-total-amount`);
+        if (totalField) {
+            totalField.value = total.toFixed(2);
+        }
     }
-
-    // Initialize event listeners
-    document.querySelectorAll('.product-row').forEach(attachEventListeners);
-
-    // Handle Mark Paid button
-    document.querySelectorAll('.mark-paid').forEach(button => {
-        button.addEventListener('click', function() {
-            document.getElementById('paid-invoice-id').value = this.dataset.id;
-        });
-    });
-
-    // Initialize Select2
-    $(document).ready(function() {
-        $('.js-example-basic-single').select2();
-    });
-
- </script>
+}
+</script>
   </body>
 </html>

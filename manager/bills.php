@@ -1,8 +1,8 @@
 <?php 
 
-session_start();
-require_once 'includes/head.php';
-require_once 'includes/header.php';
+// session_start();
+
+
 require_once 'includes/functions.php';
 require_once 'includes/db.php';
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -65,8 +65,12 @@ $categories = $pdo->query("SELECT * FROM bill_categories")->fetchAll();
 ?> 
 <!DOCTYPE html>
 <html lang="en">
+<?php
 
-<body class="with-welcome-text">
+require_once 'includes/head.php';
+require_once 'includes/header.php';
+?>
+<body >
 <div class="container-scroller">
     <!-- partial:../../partials/_navbar.html -->
     <?php require_once 'includes/navbar.php'; ?>
