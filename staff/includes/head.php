@@ -20,5 +20,5 @@
     <!-- inject:css -->
     <link rel="stylesheet" href="../assets/css/style.css">
     <!-- endinject -->
-    <link rel="shortcut icon" href="../assets/images/favicon.png" />
+    <link rel="shortcut icon" href="../assets/images/stan-prestige-plus-logo.png" />
   </head>

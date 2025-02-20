@@ -1,91 +1,12 @@
 <?php
-session_start();if (!isset($_SESSION['user_id'])) {
+session_start();
+if (!isset($_SESSION['user_id'])) {
     header('Location: ../index.php');
     exit();
 }
 require_once 'includes/header.php';
 require_once 'includes/functions.php';
 
-// Handle form submissions
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    if (isset($_POST['add_user'])) {
-        // Retrieve form data
-        $username = trim($_POST['username']);
-        $password = trim($_POST['password']);
-        $role = trim($_POST['role']);
-        $full_name = trim($_POST['full_name']);
-        $email = trim($_POST['email']);
-        $phone = trim($_POST['phone']);
-        $address = trim($_POST['address']);
-
-        // Validate form data
-        $errors = [];
-        if (empty($username)) {
-            $errors[] = "Username is required.";
-        }
-        if (empty($password)) {
-            $errors[] = "Password is required.";
-        }
-        if (empty($role)) {
-            $errors[] = "Role is required.";
-        }
-        if (empty($email)) {
-            $errors[] = "Email is required.";
-        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $errors[] = "Invalid email format.";
-        }
-
-        // If no errors, proceed to insert the user
-        if (empty($errors)) {
-            // Hash the password
-            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-
-            // Insert user into the database
-            try {
-                $pdo->beginTransaction();
-
-                // Insert into users table
-                $query = "INSERT INTO users (username, password, role) VALUES (:username, :password, :role)";
-                $stmt = $pdo->prepare($query);
-                $stmt->execute([
-                    ':username' => $username,
-                    ':password' => $hashed_password,
-                    ':role' => $role
-                ]);
-                $user_id = $pdo->lastInsertId();
-
-                // Insert into user_profiles table
-                $query = "INSERT INTO user_profiles (user_id, full_name, email, phone, address) 
-                          VALUES (:user_id, :full_name, :email, :phone, :address)";
-                $stmt = $pdo->prepare($query);
-                $stmt->execute([
-                    ':user_id' => $user_id,
-                    ':full_name' => $full_name,
-                    ':email' => $email,
-                    ':phone' => $phone,
-                    ':address' => $address,
-                ]);
-
-                $pdo->commit();
-
-                // Set success message
-                $_SESSION['message'] = "User added successfully!";
-                header('Location: users.php');
-                exit();
-            } catch (PDOException $e) {
-                $pdo->rollBack();
-                $errors[] = "Database error: " . $e->getMessage();
-            }
-        }
-
-        // If there are errors, set them in session and redirect back
-        if (!empty($errors)) {
-            $_SESSION['errors'] = $errors;
-            header('Location: user_management.php');
-            exit();
-        }
-    }
-}
 
 // Get filter values
 $filter_username = isset($_POST['filter_username']) ? $_POST['filter_username'] : '';
@@ -93,7 +14,7 @@ $filter_email = isset($_POST['filter_email']) ? $_POST['filter_email'] : '';
 
 // Fetch users along with their profiles
 $query = "
-    SELECT u.id, u.username, u.role, up.email 
+    SELECT u.id, u.username, u.role, up.email ,up.*
     FROM users u
     JOIN user_profiles up ON u.id = up.user_id
 ";
@@ -125,7 +46,7 @@ require_once 'includes/header.php';
                         <div class="card">
                             <div class="card-body">
                                 <h4 class="card-title">User Management</h4>
-                                <p class="card-description">Manage your users.</p>
+                                <p class="card-description">Manage your staff.</p>
 
                                 <!-- Filter Form in a Row -->
                                 <div class="row mb-4">
@@ -174,15 +95,19 @@ require_once 'includes/header.php';
                     <td><?php echo htmlspecialchars($user['email']); ?></td>
                     <td><?php echo htmlspecialchars($user['role']); ?></td>
                     <td>
-                        <button class="btn btn-sm btn-primary edit-user" 
-                                data-bs-toggle="modal" 
-                                data-bs-target="#editUserModal"
-                                data-id="<?php echo $user['id']; ?>"
-                                data-username="<?php echo $user['username']; ?>"
-                                data-email="<?php echo $user['email']; ?>"
-                                data-role="<?php echo $user['role']; ?>">
-                            Edit
-                        </button>
+                    <button class="btn btn-sm btn-primary edit-user" 
+    data-bs-toggle="modal" 
+    data-bs-target="#editUserModal"
+    data-id="<?php echo $user['id']; ?>"
+    data-username="<?php echo $user['username']; ?>"
+    data-email="<?php echo $user['email']; ?>"
+    data-role="<?php echo $user['role']; ?>"
+    data-full_name="<?php echo $user['full_name']; ?>"
+    data-phone="<?php echo $user['phone']; ?>"
+    data-address="<?php echo $user['address']; ?>">
+    Edit
+</button>
+
                         <button class="btn btn-sm btn-danger delete-user"
                                 data-bs-toggle="modal" 
                                 data-bs-target="#deleteUserModal"
@@ -200,7 +125,9 @@ require_once 'includes/header.php';
                         </div>
                     </div>
                 </div>
-            </div><!-- Add User Modal -->
+            </div>
+            
+            <!-- Add User Modal -->
 <div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -210,6 +137,8 @@ require_once 'includes/header.php';
             </div>
             <div class="modal-body">
                 <form id="addUserForm">
+                <div id="formError"></div> <!-- Error messages appear here -->
+
                     <!-- Username & Password -->
                     <div class="mb-3">
                         <label for="username" class="form-label">Username</label>
@@ -255,19 +184,114 @@ require_once 'includes/header.php';
                     </div>
                     
                     <!-- Avatar Upload -->
-                    <div class="mb-3">
+                    <!-- <div class="mb-3">
                         <label for="avatar" class="form-label">Avatar</label>
                         <input type="file" class="form-control" id="avatar" name="avatar">
-                    </div>
+                    </div> -->
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="submit" form="addUserForm" class="btn btn-primary">Save User</button>
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="closeModalBtn">Close</button>
+    <button type="submit" form="addUserForm" class="btn btn-primary" id="saveUserBtn">
+    Save User
+</button>
+
+</div>
+
+        </div>
+    </div>
+</div>
+<!-- edit modal -->
+<div class="modal fade" id="editUserModal" tabindex="-1" aria-labelledby="editUserModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editUserModalLabel">Edit User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="editUserForm">
+                <div class="modal-body">
+                    <div id="editFormError"></div> <!-- Error messages appear here -->
+                    
+                    <!-- Hidden User ID -->
+                    <input type="hidden" id="editUserId" name="user_id">
+
+                    <!-- Username (Not Editable) -->
+                    <div class="mb-3">
+                        <label for="editUsername" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="editUsername" name="username" readonly>
+                    </div>
+
+                    <!-- Password (Optional) -->
+                    <div class="mb-3">
+                        <label for="editPassword" class="form-label">New Password (leave blank to keep unchanged)</label>
+                        <input type="password" class="form-control" id="editPassword" name="password">
+                    </div>
+
+                    <!-- Role Selection -->
+                    <div class="mb-3">
+                        <label for="editRole" class="form-label">Role</label>
+                        <select class="form-select" id="editRole" name="role">
+                            <option value="staff">Staff</option>
+                            <option value="manager">Manager</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+
+                    <!-- Full Name -->
+                    <div class="mb-3">
+                        <label for="editFullName" class="form-label">Full Name</label>
+                        <input type="text" class="form-control" id="editFullName" name="full_name">
+                    </div>
+
+                    <!-- Email -->
+                    <div class="mb-3">
+                        <label for="editEmail" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="editEmail" name="email">
+                    </div>
+
+                    <!-- Phone -->
+                    <div class="mb-3">
+                        <label for="editPhone" class="form-label">Phone</label>
+                        <input type="text" class="form-control" id="editPhone" name="phone">
+                    </div>
+
+                    <!-- Address -->
+                    <div class="mb-3">
+                        <label for="editAddress" class="form-label">Address</label>
+                        <textarea class="form-control" id="editAddress" name="address"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+
+<div class="modal fade" id="deleteUserModal" tabindex="-1" aria-labelledby="deleteUserModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteUserModalLabel">Delete User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong id="deleteUsername"></strong>?</p>
+                <input type="hidden" id="deleteUserId">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteUser">Delete</button>
             </div>
         </div>
     </div>
 </div>
+
 
             <!-- content-wrapper ends -->
             <!-- partial:../../partials/_footer.html -->
@@ -284,6 +308,7 @@ require_once 'includes/header.php';
 
 
 <!-- Scripts -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="../../assets/vendors/js/vendor.bundle.base.js"></script>
 <script src="../../assets/vendors/bootstrap-datepicker/bootstrap-datepicker.min.js"></script>
 <script src="../../assets/js/off-canvas.js"></script>
@@ -291,6 +316,7 @@ require_once 'includes/header.php';
 <script src="../../assets/js/settings.js"></script>
 <script src="../../assets/js/hoverable-collapse.js"></script>
 <script src="../../assets/js/todolist.js"></script>
+
 <script>
 function filterTable() {
     const usernameFilter = document.getElementById('filter-username').value.toLowerCase();
@@ -321,28 +347,134 @@ function filterTable() {
     }
 }
 
-document.getElementById('addUserForm').addEventListener('submit', function(event) {
-    event.preventDefault();
 
-    const formData = new FormData(this);
+$(document).ready(function () {
+    $("#addUserForm").submit(function (e) {
+        e.preventDefault();
 
-    fetch('users.php', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('User added successfully!');
-            window.location.reload();
-        } else {
-            alert('Error: ' + data.message);
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
+        let formData = new FormData(this);
+
+        $.ajax({
+            url: "add_user.php",
+            type: "POST",
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function (response) {
+                console.log("Server Response:", response); // Debugging
+
+                if (typeof response !== "object") {
+                    try {
+                        response = JSON.parse(response);
+                    } catch (e) {
+                        console.error("Invalid JSON response", response);
+                        alert("Unexpected response. Check console for details.");
+                        return;
+                    }
+                }
+
+                if (response.status === "success") {
+                    alert(response.message);
+                    $("#addUserForm")[0].reset();
+                    $("#addUserModal").modal("hide");
+                    location.reload();
+                } else {
+                    $("#formError").html(`<div class="alert alert-danger">${response.message}</div>`);
+                }
+            },
+            error: function (xhr, status, error) {
+                console.error("AJAX Error:", xhr.responseText);
+                alert("An error occurred. Check the console.");
+            }
+        });
     });
 });
+
+
+$(document).ready(function () {
+    // EDIT USER
+    $(".edit-user").click(function () {
+        let userId = $(this).data("id");
+        let username = $(this).data("username");
+        let email = $(this).data("email");
+        let role = $(this).data("role");
+        let fullName = $(this).data("full_name");  // Get full name
+        let phone = $(this).data("phone");        // Get phone number
+        let address = $(this).data("address");    // Get address
+
+        $("#editUserId").val(userId);
+        $("#editUsername").val(username);
+        $("#editEmail").val(email);
+        $("#editRole").val(role);
+        $("#editFullName").val(fullName);
+        $("#editPhone").val(phone);
+        $("#editAddress").val(address);
+    });
+
+    // Handle form submission
+    $("#editUserForm").submit(function (e) {
+        e.preventDefault();
+
+        let formData = $(this).serialize(); // Collect form data
+
+        $.ajax({
+            url: "edit_user.php",
+            type: "POST",
+            data: formData,
+            success: function (response) {
+                if (response.status === "success") {
+                    alert("User updated successfully!");
+                    $("#editUserModal").modal("hide");
+                    location.reload(); // Refresh the page
+                } else {
+                    $("#editFormError").html(`<div class="alert alert-danger">${response.message}</div>`);
+                }
+            },
+            error: function (xhr) {
+                console.error("AJAX Error:", xhr.responseText);
+                $("#editFormError").html(`<div class="alert alert-danger">An error occurred. Please try again.</div>`);
+            }
+        });
+    });
+    // DELETE USER
+    $(document).ready(function () {
+    $(".delete-user").click(function () {
+        let userId = $(this).data("id");
+        let username = $(this).data("username");
+
+        // Populate delete modal with user info
+        $("#deleteUserId").val(userId);
+        $("#deleteUsername").text(username); // Display username in modal for confirmation
+    });
+
+    // Handle delete user action
+    $("#confirmDeleteUser").click(function () {
+        let userId = $("#deleteUserId").val();
+
+        $.ajax({
+            url: "delete_user.php",
+            type: "POST",
+            data: { user_id: userId },
+            success: function (response) {
+                console.log("Delete Response:", response);
+                if (response.status === "success") {
+                    alert(response.message);
+                    location.reload();
+                } else {
+                    alert("Error: " + response.message);
+                }
+            },
+            error: function (xhr) {
+                console.error("AJAX Error:", xhr.responseText);
+                alert("An error occurred. Check the console.");
+            }
+        });
+    });
+});
+
+
+});
+
 </script>
 
 </body>

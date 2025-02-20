@@ -184,7 +184,7 @@ echo number_format($stmt->fetchColumn(), 2);
                                                         echo "<td>" . htmlspecialchars($row['customer_name']) . "</td>";
                                                         echo "<td>" . htmlspecialchars($row['customer_number']) . "</td>";
                                                         echo "<td>$" . number_format($row['total_amount'], 2) . "</td>";
-                                                                  echo "<td>" . date('Y-m-d', strtotime($row['invoice_date'])) . "</td>";  echo "</tr>";
+                                                        echo "<td>" . date('Y-m-d', strtotime($row['invoice_date'])) . "</td>";  echo "</tr>";
                                                         $counter++; // Increment counter
                                                     }
                                                     ?>
@@ -244,14 +244,18 @@ echo number_format($stmt->fetchColumn(), 2);
                                     <?php endforeach; ?>
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label class="form-label">Quantity</label>
                                 <input type="number" class="form-control quantity" name="quantities[]" min="1" required>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label class="form-label">Unit Price</label>
                                 <input type="number" step="0.01" class="form-control price" name="prices[]" readonly>
                             </div>
+                            <div class="col-md-2">
+    <label class="form-label">Row Total</label>
+    <input type="number" step="0.01" class="form-control row-total" name="row_totals[]" readonly>
+</div>
                             <div class="col-md-1">
                                 <label class="form-label d-block">&nbsp;</label>
                                 <button type="button" class="btn btn-danger btn-sm remove-row">×</button>
@@ -304,35 +308,42 @@ echo number_format($stmt->fetchColumn(), 2);
 
                     <!-- Products Container -->
                     <div id="invoice-product-rows">
-                        <div class="row mb-3 product-row">
-                            <div class="col-md-5">
-                                <label class="form-label">Product</label>
-                                <select class="form-select product-select" name="products[]" required>
-                                    <option value="">Select Product</option>
-                                    <?php foreach ($products as $product): ?>
-                                    <option value="<?php echo $product['id']; ?>" 
-                                            data-price="<?php echo $product['price']; ?>"
-                                            data-stock="<?php echo $product['stock']; ?>">
-                                        <?php echo $product['name']; ?> (Stock: <?php echo $product['stock']; ?>)
-                                    </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Quantity</label>
-                                <input type="number" class="form-control quantity" name="quantities[]" min="1" required>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Unit Price</label>
-                                <input type="number" step="0.01" class="form-control price" name="prices[]" readonly>
-                            </div>
-                            <div class="col-md-1">
-                                <label class="form-label d-block">&nbsp;</label>
-                                <button type="button" class="btn btn-danger btn-sm remove-row">×</button>
-                            </div>
-                        </div>
-                    </div>
-
+    <div class="row mb-3 product-row">
+                <div class="col-md-3">
+                    <label class="form-label">Product</label>
+                    <select class="form-select product-select" name="products[]" required>
+                        <option value="">Select Product</option>
+                        <?php foreach ($products as $product): ?>
+                        <option value="<?php echo $product['id']; ?>"
+                                data-price="<?php echo $product['price']; ?>"
+                                data-stock="<?php echo $product['stock']; ?>">
+                            <?php echo $product['name']; ?> (Stock: <?php echo $product['stock']; ?>)
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                    <div class="col-md-2">
+                    <label class="form-label">Quantity</label>
+                    <input type="number" class="form-control quantity" name="quantities[]" min="1" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Interest</label>
+                    <input type="number" class="form-control interest" name="interests[]" step="any" value="0">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Unit Price</label>
+                    <input type="number" step="0.01" class="form-control price" name="prices[]" readonly>
+                </div>
+                <div class="col-md-2">
+                <label class="form-label">Row Total</label>
+                <input type="number" step="0.01" class="form-control row-total" name="row_totals[]" readonly>
+            </div>
+            <div class="col-md-1">
+                <label class="form-label d-block">&nbsp;</label>
+                <button type="button" class="btn btn-danger btn-sm remove-row">X</button>
+            </div>
+    </div>
+</div>
                     <button type="button" class="btn btn-secondary mb-3" id="add-invoice-product">Add Product</button>
 
                     <!-- Total Amount -->
@@ -429,7 +440,82 @@ echo number_format($stmt->fetchColumn(), 2);
  
 <!-- Updated JavaScript -->
 <script>
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener("DOMContentLoaded", function () {
+    // Add product button handlers
+    ['add-sale-product', 'add-invoice-product'].forEach(buttonId => {
+        const addButton = document.getElementById(buttonId);
+        if (addButton) {
+            addButton.addEventListener('click', function () {
+                const containerType = buttonId.includes('sale') ? 'sale' : 'invoice';
+                const container = document.getElementById(`${containerType}-product-rows`);
+                const newRow = container.querySelector('.product-row').cloneNode(true);
+
+                // Reset values
+                newRow.querySelector('.product-select').value = '';
+                newRow.querySelector('.quantity').value = '';
+                newRow.querySelector('.price').value = '';
+                
+                // Reset interest and row-total if they exist (for invoice form)
+                const interestInput = newRow.querySelector('.interest');
+                if (interestInput) interestInput.value = '0';
+                
+                const rowTotalInput = newRow.querySelector('.row-total');
+                if (rowTotalInput) rowTotalInput.value = '';
+
+                container.appendChild(newRow);
+                updateTotalAmount(containerType);
+            });
+        }
+    });
+
+    // Remove row handler using event delegation
+    document.addEventListener('click', function (e) {
+        if (e.target.classList.contains('remove-row')) {
+            const row = e.target.closest('.product-row');
+            const container = row.parentElement;
+            const containerType = container.id.includes('sale') ? 'sale' : 'invoice';
+            
+            if (container.querySelectorAll('.product-row').length > 1) {
+                row.remove();
+                updateTotalAmount(containerType);
+            } else {
+                alert('Cannot remove the last row.');
+            }
+        }
+    });
+
+    // Use event delegation for product selection, quantity and interest changes
+    ['sale', 'invoice'].forEach(containerType => {
+        const container = document.getElementById(`${containerType}-product-rows`);
+        if (container) {
+            // Handle product selection changes
+            container.addEventListener('change', function (e) {
+                if (e.target.classList.contains('product-select')) {
+                    const row = e.target.closest('.product-row');
+                    const selectedOption = e.target.options[e.target.selectedIndex];
+                    
+                    if (selectedOption && selectedOption.dataset.price) {
+                        row.querySelector('.price').value = selectedOption.dataset.price;
+                        updateRowTotal(row, containerType);
+                        updateTotalAmount(containerType);
+                    }
+                }
+            });
+
+            // Handle quantity and interest changes
+            container.addEventListener('input', function (e) {
+                if (e.target.classList.contains('quantity') || 
+                    e.target.classList.contains('interest') ||
+                    e.target.classList.contains('price')) {
+                    const row = e.target.closest('.product-row');
+                    updateRowTotal(row, containerType);
+                    updateTotalAmount(containerType);
+                }
+            });
+        }
+    });
+
+    // Handle form submissions
     function handleFormSubmit(formId, modalId, type) {
         const form = document.getElementById(formId);
         if (form) {
@@ -480,186 +566,165 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         }
     }
+
     function printSale(saleId) {
-    fetch('api.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `action=print_sale&sale_id=${saleId}`
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success') {
-            fetch('print_template.html')
-                .then(response => response.text())
-                .then(template => {
-                    const printWindow = window.open('', '_blank');
-                    printWindow.document.write(template);
-                    printWindow.document.close();
+        fetch('api.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `action=print_sale&sale_id=${saleId}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                fetch('print_template.html')
+                    .then(response => response.text())
+                    .then(template => {
+                        const printWindow = window.open('', '_blank');
+                        printWindow.document.write(template);
+                        printWindow.document.close();
 
-                    printWindow.onload = function () {
-                        // Populate customer details
-                        printWindow.document.getElementById('customerName').textContent = data.data.customer_name;
-                        printWindow.document.getElementById('customerNumber').textContent = data.data.customer_number;
-                        printWindow.document.getElementById('invoiceDate').textContent = data.data.invoice_date;
+                        printWindow.onload = function () {
+                            // Populate customer details
+                            printWindow.document.getElementById('customerName').textContent = data.data.customer_name;
+                            printWindow.document.getElementById('customerNumber').textContent = data.data.customer_number;
+                            printWindow.document.getElementById('invoiceDate').textContent = data.data.invoice_date;
 
-                        // Populate product rows
-                        const productsTable = printWindow.document.getElementById('productsTable');
-                        productsTable.innerHTML = ''; // Clear previous rows
+                            // Populate product rows
+                            const productsTable = printWindow.document.getElementById('productsTable');
+                            productsTable.innerHTML = ''; // Clear previous rows
 
-                        data.data.products.forEach(product => {
-                            const row = printWindow.document.createElement('tr');
-                            row.innerHTML = `
-                                <td>${product.product_name}</td>
-                                <td>${product.quantity}</td>
-                                <td>${product.unit_price}</td>
-                                <td>${product.total_price}</td>
-                            `;
-                            productsTable.appendChild(row);
-                        });
+                            data.data.products.forEach(product => {
+                                const row = printWindow.document.createElement('tr');
+                                row.innerHTML = `
+                                    <td>${product.product_name}</td>
+                                    <td>${product.quantity}</td>
+                                    <td>${product.unit_price}</td>
+                                    <td>${product.total_price}</td>
+                                `;
+                                productsTable.appendChild(row);
+                            });
 
-                        // Print the window
-                        printWindow.print();
-                    };
-                });
-        } else {
-            alert('Error: ' + data.message);
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('An error occurred while printing the sale.');
-    });
-}
-
-function printInvoice(invoiceId) {
-    fetch('api.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `action=print_invoice&invoice_id=${invoiceId}`
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success') {
-            fetch('print_template.html')
-                .then(response => response.text())
-                .then(template => {
-                    const printWindow = window.open('', '_blank');
-                    printWindow.document.write(template);
-                    printWindow.document.close();
-
-                    printWindow.onload = function () {
-                        // Populate customer details
-                        printWindow.document.getElementById('customerName').textContent = data.data.customer_name;
-                        printWindow.document.getElementById('customerNumber').textContent = data.data.customer_number;
-                        printWindow.document.getElementById('invoiceDate').textContent = data.data.invoice_date;
-
-                        // Populate product rows
-                        const productsTable = printWindow.document.getElementById('productsTable');
-                        productsTable.innerHTML = ''; // Clear previous rows
-
-                        data.data.products.forEach(product => {
-                            const row = printWindow.document.createElement('tr');
-                            row.innerHTML = `
-                                <td>${product.product_name}</td>
-                                <td>${product.quantity}</td>
-                                <td>${product.unit_price}</td>
-                                <td>${product.total_price}</td>
-                            `;
-                            productsTable.appendChild(row);
-                        });
-
-                        // Print the window
-                        printWindow.print();
-                    };
-                });
-        } else {
-            alert('Error: ' + data.message);
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('An error occurred while printing the invoice.');
-    });
-}
-
-
-handleFormSubmit('saleForm', 'salesModal', 'sale'); 
-handleFormSubmit('invoiceForm', 'invoicesModal', 'invoice');
-
-    // Add product row handler
-    ['add-sale-product', 'add-invoice-product'].forEach(buttonId => {
-        const addButton = document.getElementById(buttonId);
-        if (addButton) {
-            addButton.addEventListener('click', function () {
-                const containerType = buttonId.includes('sale') ? 'sale' : 'invoice';
-                const container = document.getElementById(`${containerType}-product-rows`);
-                const newRow = container.querySelector('.product-row').cloneNode(true);
-
-                // Reset values
-                newRow.querySelector('.product-select').value = '';
-                newRow.querySelector('.quantity').value = '';
-                newRow.querySelector('.price').value = '';
-
-                container.appendChild(newRow);
-                attachEventListeners(newRow, containerType);
-            });
-        }
-    });
-
-    // Remove row handler
-    document.addEventListener('click', function (e) {
-        if (e.target.classList.contains('remove-row')) {
-            const row = e.target.closest('.product-row');
-            const container = row.parentElement;
-            if (container.querySelectorAll('.product-row').length > 1) {
-                row.remove();
-                const containerType = container.id.includes('sale') ? 'sale' : 'invoice';
-                calculateTotal(containerType);
+                            // Print the window
+                            printWindow.print();
+                        };
+                    });
+            } else {
+                alert('Error: ' + data.message);
             }
-        }
-    });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while printing the sale.');
+        });
+    }
 
-    // Initialize existing rows
-    document.querySelectorAll('.product-row').forEach(row => {
-        const containerType = row.closest('[id^=sale]') ? 'sale' : 'invoice';
-        attachEventListeners(row, containerType);
+    function printInvoice(invoiceId) {
+        fetch('api.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `action=print_invoice&invoice_id=${invoiceId}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                fetch('print_template.html')
+                    .then(response => response.text())
+                    .then(template => {
+                        const printWindow = window.open('', '_blank');
+                        printWindow.document.write(template);
+                        printWindow.document.close();
+
+                        printWindow.onload = function () {
+                            // Populate customer details
+                            printWindow.document.getElementById('customerName').textContent = data.data.customer_name;
+                            printWindow.document.getElementById('customerNumber').textContent = data.data.customer_number;
+                            printWindow.document.getElementById('invoiceDate').textContent = data.data.invoice_date; 
+                            printWindow.document.getElementById('total').textContent = data.data.total;
+
+
+                            // Populate product rows
+                            const productsTable = printWindow.document.getElementById('productsTable');
+                            productsTable.innerHTML = ''; // Clear previous rows
+
+                            data.data.products.forEach(product => {
+                                const row = printWindow.document.createElement('tr');
+                                row.innerHTML = `
+                                    <td>${product.product_name}</td>
+                                    <td>${product.quantity}</td>
+                                    <td>${product.unit_price}</td>
+                                    <td>${product.total_price}</td>
+                                `;
+                                productsTable.appendChild(row);
+                            });
+
+                            // Print the window
+                            printWindow.print();
+                        };
+                    });
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while printing the invoice.');
+        });
+    }
+
+    // Initialize handlers
+    handleFormSubmit('saleForm', 'salesModal', 'sale'); 
+    handleFormSubmit('invoiceForm', 'invoicesModal', 'invoice');
+
+    // Initial calculation for all containers
+    ['sale', 'invoice'].forEach(containerType => {
+        updateTotalAmount(containerType);
     });
 });
 
 
-function attachEventListeners(row, containerType) {
-    const productSelect = row.querySelector('.product-select');
-    const quantityInput = row.querySelector('.quantity');
-    const priceInput = row.querySelector('.price');
-
-    if (productSelect && quantityInput && priceInput) {
-        productSelect.addEventListener('change', function() {
-            const option = this.options[this.selectedIndex];
-            if (option && option.value) {
-                priceInput.value = option.dataset.price;
-                quantityInput.max = option.dataset.stock;
-                calculateTotal(containerType);
-            }
-        });
-
-        quantityInput.addEventListener('input', () => calculateTotal(containerType));
-        priceInput.addEventListener('input', () => calculateTotal(containerType));
+// Function to update a single row's total
+function updateRowTotal(row, containerType) {
+    const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
+    const unitPrice = parseFloat(row.querySelector('.price').value) || 0;
+    const baseAmount = quantity * unitPrice;
+    
+    // For invoice form with interest
+    if (containerType === 'invoice') {
+        const interestRate = parseFloat(row.querySelector('.interest').value) || 0;
+        const interestAmount = baseAmount * (interestRate / 100);
+        const rowTotal = baseAmount + interestAmount;
+        
+        // Update the row-total input
+        const rowTotalInput = row.querySelector('.row-total');
+        if (rowTotalInput) {
+            rowTotalInput.value = rowTotal.toFixed(2);
+        }
+        
+        return rowTotal;
+    } else {
+        // For sale form without interest
+        // Update the row-total input if it exists
+        const rowTotalInput = row.querySelector('.row-total');
+        if (rowTotalInput) {
+            rowTotalInput.value = baseAmount.toFixed(2);
+        }
+        return baseAmount;
     }
 }
 
-function calculateTotal(containerType) {
+// Function to update the container total
+function updateTotalAmount(containerType) {
     const container = document.getElementById(`${containerType}-product-rows`);
-    if (container) {
+    const totalField = document.getElementById(`${containerType}-total-amount`);
+    
+    if (container && totalField) {
         let total = 0;
+        
         container.querySelectorAll('.product-row').forEach(row => {
-            const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
-            const price = parseFloat(row.querySelector('.price').value) || 0;
-            total += quantity * price;
+            total += updateRowTotal(row, containerType);
         });
-        const totalField = document.getElementById(`${containerType}-total-amount`);
-        if (totalField) {
-            totalField.value = total.toFixed(2);
-        }
+        
+        totalField.value = total.toFixed(2);
     }
 }
 </script>

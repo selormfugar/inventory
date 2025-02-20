@@ -42,7 +42,7 @@ try {
 
 function handleSaleSubmission($pdo) {
     try {
-        validateRequiredFields(['customer_name', 'customer_number', 'total_amount', 'products', 'quantities', 'prices']);
+        validateRequiredFields(['customer_name', 'customer_number', 'total_amount', 'interest','products', 'quantities', 'prices']);
 
         if (!isset($_SESSION['user_id'])) {
             throw new Exception("User not authenticated");
@@ -52,14 +52,15 @@ function handleSaleSubmission($pdo) {
         $pdo->beginTransaction();
 
         // Insert into sales table with user_id
-        $stmt = $pdo->prepare("INSERT INTO sales (customer_name, customer_number, invoice_date, total_amount, user_id) 
-                              VALUES (:customer_name, :customer_number, NOW(), :total_amount, :user_id)");
+        $stmt = $pdo->prepare("INSERT INTO sales (customer_name, customer_number, interest, invoice_date, total_amount, user_id) 
+                              VALUES (:customer_name, :customer_number,:interest, NOW(), :total_amount, :user_id)");
         
         $stmt->execute([
             ':customer_name' => htmlspecialchars(trim($_POST['customer_name'])),
             ':customer_number' => htmlspecialchars(trim($_POST['customer_number'])),
             ':total_amount' => (float)$_POST['total_amount'],
-            ':user_id' => $user_id
+            ':user_id' => $user_id,
+            ':interest' => $_POST['interest']
         ]);
         
         $sales_id = $pdo->lastInsertId();
@@ -68,8 +69,8 @@ function handleSaleSubmission($pdo) {
         }
 
         // Insert into sale_order table
-        $stmt = $pdo->prepare("INSERT INTO sale_order (sales_id, product_id, quantity, unit_price, total_price, created_at, user_id) 
-                              VALUES (:sales_id, :product_id, :quantity, :unit_price, :total_price, NOW(), :user_id)");
+        $stmt = $pdo->prepare("INSERT INTO sale_order (sales_id, product_id, quantity, interest, unit_price, total_price, created_at, user_id) 
+                              VALUES (:sales_id, :product_id, :quantity, :unit_price,:interest,:total_price, NOW(), :user_id)");
 
         foreach ($_POST['products'] as $index => $product_id) {
             if (!empty($product_id)) {
@@ -77,12 +78,18 @@ function handleSaleSubmission($pdo) {
 
                 $quantity = (int)$_POST['quantities'][$index];
                 $unit_price = (float)$_POST['prices'][$index];
-                $total_price = $quantity * $unit_price;
+                $interest = $_POST['interest'];
+                $total_price = ($quantity * $unit_price);
+                if ($index == 0) { // Add interest only once (on the first product)
+                    $total_price += $interest;
+                }
+                
 
                 $stmt->execute([
                     ':sales_id' => $sales_id,
                     ':product_id' => $product_id,
                     ':quantity' => $quantity,
+                    ':interest' => $interest,
                     ':unit_price' => $unit_price,
                     ':total_price' => $total_price,
                     ':user_id' => $user_id
@@ -247,7 +254,7 @@ function handlePrintInvoice($pdo) {
 
         // Fetch invoice details
         $stmt = $pdo->prepare("
-            SELECT i.*, nio.product_id, p.name AS product_name, nio.quantity, nio.unit_price, nio.total_price
+            SELECT i.*, nio.product_id, p.name AS product_name, nio.quantity, nio.unit_price, nio.total_price, i.total_amount as total
             FROM invoices i
             JOIN new_invoice_order nio ON i.id = nio.invoice_id
             JOIN products p ON nio.product_id = p.id
@@ -267,6 +274,7 @@ function handlePrintInvoice($pdo) {
             'customer_number' => $invoice_data[0]['customer_number'],
             'invoice_date' => $invoice_data[0]['invoice_date'],
             'total_amount' => $invoice_data[0]['total_amount'],
+            'total' => $invoice_data[0]['total'],
             'products' => []
         ];
 

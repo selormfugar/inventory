@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Print Document</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 40px;
+            background-color: #f9f9f9;
+            color: #333;
+        }
+        .container {
+            background: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .header img {
+            max-width: 150px; /* Slightly bigger logo */
+        }
+        .header h1 {
+            font-size: 24px;
+            color: #222;
+        }
+        .company-details {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .company-details p {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px; /* Increased space between items */
+            flex-wrap: wrap;
+            margin: 0;
+            padding: 10px 0;
+        }
+        .company-details i {
+            margin-right: 5px;
+            color: #ff0000; /* Red-colored icons */
+        }
+        .form-title {
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        .details {
+            text-align: left; /* Align customer details to the left */
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .details p {
+            margin: 5px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #0073e6;
+            color: #fff;
+            font-size: 14px;
+        }
+        .signature-section {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+            font-size: 14px;
+        }
+        .signature-section div {
+            width: 48%;
+            text-align: center;
+            border-top: 1px solid #000;
+            padding-top: 10px;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 12px;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="../stan-prestige-plus-logo.png" alt="Company Logo">
+            <h1>Sale/Invoice Details</h1>
+        </div>
+        
+        <div class="company-details">
+            <p>
+                <i class="fas fa-map-marker-alt"></i> P.O. Box 1527, Osu - Accra
+                <i class="fas fa-phone"></i> +233 26 6 648 327 / +233 55 9 049 39
+                <i class="fas fa-envelope"></i> stanfordprestigepius@gmail.com
+                <i class="fas fa-id-card"></i> 8 GS-0797-7789
+            </p>
+        </div>
+
+       
+        <div class="details">
+            <p><strong>Customer Name:</strong> <span id="customerName"></span></p>
+            <p><strong>Customer Number:</strong> <span id="customerNumber"></span></p>
+            <p><strong>Date:</strong> <span id="invoiceDate"></span></p>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>Quantity</th>
+                    <th>Unit Price</th>
+                    <th>Total Price</th>
+                </tr>
+            </thead>
+            <tbody id="productsTable">
+                <!-- Product rows will be inserted here -->
+            </tbody>
+        </table>
+
+        <div class="signature-section">
+            <div>
+                <p>Signature of Applicant</p>
+                <p>Date: ........................</p>
+            </div>
+            <div>
+                <p>Signature of Official</p>
+                <p>Date: ........................</p>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Thank you for your business!</p>
+            <p>Stan Prestige Plus | Osu - Accra | +233 26 6 648 327</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,67 +1,96 @@
-<!-- Add User Modal -->
-<div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="addUserModalLabel">Add New User</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="addUserForm">
-                    <div class="row">
-                        <!-- Left Column -->
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="username" class="form-label">Username</label>
-                                <input type="text" class="form-control" id="username" name="username" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="password" class="form-label">Password</label>
-                                <input type="password" class="form-control" id="password" name="password" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="role" class="form-label">Role</label>
-                                <select class="form-select" id="role" name="role">
-                                    <option value="staff" selected>Staff</option>
-                                    <option value="manager">Manager</option>
-                                    <option value="admin">Admin</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label for="full_name" class="form-label">Full Name</label>
-                                <input type="text" class="form-control" id="full_name" name="full_name">
-                            </div>
-                        </div>
-                        
-                        <!-- Right Column -->
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="email" class="form-label">Email</label>
-                                <input type="email" class="form-control" id="email" name="email">
-                            </div>
-                            <div class="mb-3">
-                                <label for="phone" class="form-label">Phone</label>
-                                <input type="text" class="form-control" id="phone" name="phone">
-                            </div>
-                            <div class="mb-3">
-                                <label for="address" class="form-label">Address</label>
-                                <textarea class="form-control" id="address" name="address"></textarea>
-                            </div>
-                          
-                        </div>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="submit" form="addUserForm" class="btn btn-primary">Save User</button>
-            </div>
-        </div>
-    </div>
-</div>
+<?php
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
-<script>
-    document.getElementById('addUserModal').addEventListener('show.bs.modal', function () {
-        document.getElementById('addUserForm').reset();
-    });
-</script>
+header('Content-Type: application/json');
+session_start();
+// require_once 'includes/functions.php';
+require_once 'includes/config.php';
+require_once 'includes/db.php';
+
+$response = ["status" => "error", "message" => "Something went wrong"];
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if (isset($_POST['username'], $_POST['password'], $_POST['role'], $_POST['email'])) {
+        $username = trim($_POST['username']);
+        $password = trim($_POST['password']);
+        $role = trim($_POST['role']);
+        $full_name = trim($_POST['full_name']);
+        $email = trim($_POST['email']);
+        $phone = trim($_POST['phone']);
+        $address = trim($_POST['address']);
+
+        if (empty($username) || empty($password) || empty($role) || empty($email)) {
+            echo json_encode(["status" => "error", "message" => "All required fields must be filled."]);
+            exit();
+        }
+
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            echo json_encode(["status" => "error", "message" => "Invalid email format."]);
+            exit();
+        }
+
+        // Hash password
+        $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+
+        try {
+            // Check if email already exists
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM user_profiles WHERE email = :email");
+            $stmt->execute([':email' => $email]);
+            $emailExists = $stmt->fetchColumn();
+        
+            if ($emailExists) {
+                echo json_encode(["status" => "error", "message" => "Email already exists. Please use a different email."]);
+                exit();
+            }
+        
+            // Check if username already exists
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE username = :username");
+            $stmt->execute([':username' => $username]);
+            $usernameExists = $stmt->fetchColumn();
+        
+            if ($usernameExists) {
+                echo json_encode(["status" => "error", "message" => "Username already exists. Please choose another username."]);
+                exit();
+            }
+        
+            // Hash password
+            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+        
+            // Start transaction
+            $pdo->beginTransaction();
+        
+            // Insert into users table
+            $query = "INSERT INTO users (username, password, role) VALUES (:username, :password, :role)";
+            $stmt = $pdo->prepare($query);
+            $stmt->execute([
+                ':username' => $username,
+                ':password' => $hashed_password,
+                ':role' => $role
+            ]);
+            $user_id = $pdo->lastInsertId();
+        
+            // Insert into user_profiles table
+            $query = "INSERT INTO user_profiles (user_id, full_name, email, phone, address) 
+                      VALUES (:user_id, :full_name, :email, :phone, :address)";
+            $stmt = $pdo->prepare($query);
+            $stmt->execute([
+                ':user_id' => $user_id,
+                ':full_name' => $full_name,
+                ':email' => $email,
+                ':phone' => $phone,
+                ':address' => $address,
+            ]);
+        
+            $pdo->commit();
+        
+            echo json_encode(["status" => "success", "message" => "User added successfully!"]);
+            exit();
+        } catch (PDOException $e) {
+            $pdo->rollBack();
+            echo json_encode(["status" => "error", "message" => $e->getMessage()]);
+            exit();
+        }
+        
+    }
+}
