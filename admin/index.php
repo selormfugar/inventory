@@ -682,16 +682,14 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 
-// Function to update a single row's total
 function updateRowTotal(row, containerType) {
     const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
     const unitPrice = parseFloat(row.querySelector('.price').value) || 0;
     const baseAmount = quantity * unitPrice;
     
-    // For invoice form with interest
+    // For invoice form with direct addition of interest
     if (containerType === 'invoice') {
-        const interestRate = parseFloat(row.querySelector('.interest').value) || 0;
-        const interestAmount = baseAmount * (interestRate / 100);
+        const interestAmount = parseFloat(row.querySelector('.interest').value) || 0;
         const rowTotal = baseAmount + interestAmount;
         
         // Update the row-total input
@@ -703,7 +701,6 @@ function updateRowTotal(row, containerType) {
         return rowTotal;
     } else {
         // For sale form without interest
-        // Update the row-total input if it exists
         const rowTotalInput = row.querySelector('.row-total');
         if (rowTotalInput) {
             rowTotalInput.value = baseAmount.toFixed(2);
